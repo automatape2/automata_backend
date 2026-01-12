@@ -99,6 +99,45 @@ class VisitResource extends Resource
                     ->label('User Agent Completo')
                     ->columnSpanFull()
                     ->placeholder('-'),
+                TextEntry::make('navigation_journey')
+                    ->label('🗺️ Recorrido de Navegación (Sesión Completa)')
+                    ->columnSpanFull()
+                    ->state(function (Visit $record) {
+                        if (!$record->session_id) {
+                            return 'No hay sesión registrada';
+                        }
+
+                        $visits = $record->sessionVisits();
+                        
+                        if ($visits->isEmpty()) {
+                            return 'No hay visitas en esta sesión';
+                        }
+
+                        $journey = '';
+                        foreach ($visits as $index => $visit) {
+                            $isCurrent = $visit->id === $record->id;
+                            $marker = $isCurrent ? '➡️' : '•';
+                            $time = $visit->created_at->format('H:i:s');
+                            $path = parse_url($visit->url, PHP_URL_PATH) ?: $visit->url ?: 'Desconocido';
+                            
+                            $journey .= sprintf(
+                                "%s Paso %d - %s - %s%s\n",
+                                $marker,
+                                $index + 1,
+                                $time,
+                                $path,
+                                $isCurrent ? ' (Actual)' : ''
+                            );
+                        }
+
+                        $totalTime = $visits->last()->created_at->diffInMinutes($visits->first()->created_at);
+                        $journey .= "\n📊 Total de páginas: {$visits->count()} | ⏱️ Tiempo en sitio: {$totalTime} minutos";
+
+                        return $journey;
+                    })
+                    ->formatStateUsing(fn (string $state): string => $state)
+                    ->extraAttributes(['style' => 'white-space: pre-line; font-family: monospace; background: #f8f9fa; padding: 1rem; border-radius: 0.5rem;'])
+                    ->visible(fn (Visit $record) => $record->session_id !== null),
             ]);
     }
 
@@ -112,6 +151,17 @@ class VisitResource extends Resource
                     ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->toggleable(),
+                TextColumn::make('session_id')
+                    ->label('Sesión')
+                    ->searchable()
+                    ->toggleable()
+                    ->copyable()
+                    ->formatStateUsing(fn ($state) => $state ? substr($state, 0, 8).'...' : '-')
+                    ->description(function (Visit $record): ?string {
+                        if (!$record->session_id) return null;
+                        $count = Visit::where('session_id', $record->session_id)->count();
+                        return $count > 1 ? "{$count} páginas visitadas" : null;
+                    }),
                 TextColumn::make('url')
                     ->label('Página Visitada')
                     ->searchable()
@@ -127,7 +177,7 @@ class VisitResource extends Resource
                     ->label('Desde')
                     ->searchable()
                     ->limit(40)
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('ip_address')
                     ->label('IP')
                     ->searchable()
@@ -162,11 +212,6 @@ class VisitResource extends Resource
                     ->label('Sistema')
                     ->searchable()
                     ->toggleable(),
-                TextColumn::make('session_id')
-                    ->label('Sesión')
-                    ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true)
-                    ->copyable(),
                 TextColumn::make('user_agent')
                     ->label('User Agent')
                     ->searchable()
