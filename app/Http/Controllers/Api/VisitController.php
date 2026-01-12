@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Visit;
 use Illuminate\Http\Request;
 use Jenssegers\Agent\Agent;
+use Stevebauman\Location\Facades\Location;
 
 class VisitController extends Controller
 {
@@ -21,25 +22,53 @@ class VisitController extends Controller
 
         $agent = new Agent();
         $agent->setUserAgent($request->userAgent());
+        
+        // Obtener geolocalización desde la IP
+        $ipAddress = $request->ip();
+        $location = null;
+        
+        // No intentar geolocalizar IPs locales
+        if (!in_array($ipAddress, ['127.0.0.1', 'localhost', '::1'])) {
+            try {
+                $location = Location::get($ipAddress);
+            } catch (\Exception $e) {
+                // Si falla la geolocalización, continuar sin ella
+                $location = null;
+            }
+        }
 
         $visit = Visit::create([
-            'ip_address' => $request->ip(),
+            'ip_address' => $ipAddress,
             'user_agent' => $request->userAgent(),
             'referer' => $request->header('referer'),
             'url' => $validated['url'] ?? $request->header('referer'),
             'session_id' => $validated['session_id'] ?? null,
             'device_type' => $this->getDeviceType($agent),
-            'browser' => $agent->browser(),
-            'platform' => $agent->platform(),
-            // country y city se pueden agregar con un servicio de geolocalización
-            'country' => null,
-            'city' => null,
+            'browser' => $agent->browser() . ' ' . $agent->version($agent->browser()),
+            'platform' => $agent->platform() . ' ' . $agent->version($agent->platform()),
+            'country' => $location?->countryName,
+            'city' => $location?->cityName,
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Visita registrada correctamente',
             'visit_id' => $visit->id,
+            'debug' => [
+                'ip' => $ipAddress,
+                'browser' => $agent->browser() . ' ' . $agent->version($agent->browser()),
+                'platform' => $agent->platform() . ' ' . $agent->version($agent->platform()),
+                'device' => $this->getDeviceType($agent),
+                'country' => $location?->countryName,
+                'city' => $location?->cityName,
+                'region' => $location?->regionName,
+                'postal_code' => $location?->postalCode,
+                'latitude' => $location?->latitude,
+                'longitude' => $location?->longitude,
+                'timezone' => $location?->timezone,
+                'is_robot' => $agent->isRobot(),
+                'robot_name' => $agent->robot(),
+            ]
         ], 201);
     }
 
