@@ -3,7 +3,8 @@
 return [
 
     'asset_url' => env('LIVEWIRE_ASSET_URL', env('APP_URL') . '/livewire/livewire.js'),
-    'update_path' => env('LIVEWIRE_UPDATE_PATH', 'portofolio_backend/livewire/update'),
+    'app_url' => env('LIVEWIRE_APP_URL', env('APP_URL')),
+    'update_path' => env('LIVEWIRE_UPDATE_PATH', 'education_portal/livewire/update'),
 
 
     /*
