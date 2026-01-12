@@ -176,14 +176,9 @@ class VisitResource extends Resource
                 TextColumn::make('created_at')
                     ->label('Inicio de Sesión')
                     ->dateTime('d/m/Y H:i')
-                    ->sortable()
-                    ->description(function (Visit $record): ?string {
-                        $visits = Visit::where('session_id', $record->session_id)->get();
-                        $last = $visits->last();
-                        return 'Fin: ' . $last->created_at->format('d/m/Y H:i');
-                    }),
+                    ->sortable(),
                 TextColumn::make('session_pages')
-                    ->label('Páginas Visitadas')
+                    ->label('Páginas')
                     ->state(function (Visit $record) {
                         return Visit::where('session_id', $record->session_id)->count();
                     })
@@ -202,7 +197,9 @@ class VisitResource extends Resource
                         
                         $minutes = $visits->first()->created_at->diffInMinutes($visits->last()->created_at);
                         return $minutes > 0 ? "{$minutes} min" : '< 1 min';
-                    }),
+                    })
+                    ->badge()
+                    ->color('warning'),
                 TextColumn::make('navigation_path')
                     ->label('Recorrido')
                     ->state(function (Visit $record) {
@@ -226,27 +223,11 @@ class VisitResource extends Resource
                             return parse_url($visit->url, PHP_URL_PATH) ?: '/';
                         })->join(' → ');
                     }),
-                TextColumn::make('session_id')
-                    ->label('ID Sesión')
-                    ->searchable()
-                    ->toggleable()
-                    ->formatStateUsing(fn ($state) => substr($state, 0, 8).'...')
-                    ->copyable(),
-                TextColumn::make('ip_address')
-                    ->label('IP')
-                    ->searchable()
-                    ->copyable()
-                    ->toggleable(),
                 TextColumn::make('country')
                     ->label('País')
-                    ->searchable()
-                    ->toggleable()
                     ->badge()
-                    ->color('success'),
-                TextColumn::make('city')
-                    ->label('Ciudad')
-                    ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->color('success')
+                    ->placeholder('-'),
                 TextColumn::make('device_type')
                     ->label('Dispositivo')
                     ->badge()
@@ -256,20 +237,11 @@ class VisitResource extends Resource
                         'tablet' => 'warning',
                         'bot' => 'danger',
                         default => 'gray',
-                    })
-                    ->toggleable(),
-                TextColumn::make('browser')
-                    ->label('Navegador')
+                    }),
+                TextColumn::make('ip_address')
+                    ->label('IP')
                     ->searchable()
-                    ->toggleable(),
-                TextColumn::make('platform')
-                    ->label('Sistema')
-                    ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('user_agent')
-                    ->label('User Agent')
-                    ->searchable()
-                    ->limit(50)
+                    ->copyable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('created_at', 'desc')
