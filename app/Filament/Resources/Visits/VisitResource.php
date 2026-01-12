@@ -161,39 +161,77 @@ class VisitResource extends Resource
     {
         return $table
             ->recordTitleAttribute('Resource1')
+            ->query(function () {
+                // Obtener solo una visita por sesión (la primera)
+                return Visit::whereNotNull('session_id')
+                    ->whereIn('id', function ($query) {
+                        $query->selectRaw('MIN(id)')
+                            ->from('visits')
+                            ->whereNotNull('session_id')
+                            ->groupBy('session_id');
+                    })
+                    ->orderBy('created_at', 'desc');
+            })
             ->columns([
                 TextColumn::make('created_at')
-                    ->label('Fecha')
+                    ->label('Inicio de Sesión')
                     ->dateTime('d/m/Y H:i')
                     ->sortable()
-                    ->toggleable(),
+                    ->description(function (Visit $record): ?string {
+                        $visits = Visit::where('session_id', $record->session_id)->get();
+                        $last = $visits->last();
+                        return 'Fin: ' . $last->created_at->format('d/m/Y H:i');
+                    }),
+                TextColumn::make('session_pages')
+                    ->label('Páginas Visitadas')
+                    ->state(function (Visit $record) {
+                        return Visit::where('session_id', $record->session_id)->count();
+                    })
+                    ->badge()
+                    ->color('info'),
+                TextColumn::make('session_duration')
+                    ->label('Duración')
+                    ->state(function (Visit $record) {
+                        $visits = Visit::where('session_id', $record->session_id)
+                            ->orderBy('created_at')
+                            ->get();
+                        
+                        if ($visits->count() < 2) {
+                            return '< 1 min';
+                        }
+                        
+                        $minutes = $visits->first()->created_at->diffInMinutes($visits->last()->created_at);
+                        return $minutes > 0 ? "{$minutes} min" : '< 1 min';
+                    }),
+                TextColumn::make('navigation_path')
+                    ->label('Recorrido')
+                    ->state(function (Visit $record) {
+                        $visits = Visit::where('session_id', $record->session_id)
+                            ->orderBy('created_at', 'asc')
+                            ->get();
+                        
+                        $path = $visits->map(function ($visit) {
+                            $parsed = parse_url($visit->url, PHP_URL_PATH);
+                            return $parsed ?: '/';
+                        })->join(' → ');
+                        
+                        return strlen($path) > 60 ? substr($path, 0, 60).'...' : $path;
+                    })
+                    ->tooltip(function (Visit $record): ?string {
+                        $visits = Visit::where('session_id', $record->session_id)
+                            ->orderBy('created_at', 'asc')
+                            ->get();
+                        
+                        return $visits->map(function ($visit) {
+                            return parse_url($visit->url, PHP_URL_PATH) ?: '/';
+                        })->join(' → ');
+                    }),
                 TextColumn::make('session_id')
-                    ->label('Sesión')
+                    ->label('ID Sesión')
                     ->searchable()
                     ->toggleable()
-                    ->copyable()
-                    ->formatStateUsing(fn ($state) => $state ? substr($state, 0, 8).'...' : '-')
-                    ->description(function (Visit $record): ?string {
-                        if (!$record->session_id) return null;
-                        $count = Visit::where('session_id', $record->session_id)->count();
-                        return $count > 1 ? "{$count} páginas visitadas" : null;
-                    }),
-                TextColumn::make('url')
-                    ->label('Página Visitada')
-                    ->searchable()
-                    ->limit(50)
-                    ->tooltip(function (TextColumn $column): ?string {
-                        $state = $column->getState();
-                        if (strlen($state) > 50) {
-                            return $state;
-                        }
-                        return null;
-                    }),
-                TextColumn::make('referer')
-                    ->label('Desde')
-                    ->searchable()
-                    ->limit(40)
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->formatStateUsing(fn ($state) => substr($state, 0, 8).'...')
+                    ->copyable(),
                 TextColumn::make('ip_address')
                     ->label('IP')
                     ->searchable()
@@ -208,7 +246,7 @@ class VisitResource extends Resource
                 TextColumn::make('city')
                     ->label('Ciudad')
                     ->searchable()
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('device_type')
                     ->label('Dispositivo')
                     ->badge()
@@ -227,7 +265,7 @@ class VisitResource extends Resource
                 TextColumn::make('platform')
                     ->label('Sistema')
                     ->searchable()
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('user_agent')
                     ->label('User Agent')
                     ->searchable()
