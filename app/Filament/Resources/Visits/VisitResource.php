@@ -113,118 +113,59 @@ class VisitResource extends Resource
                             return 'No hay visitas en esta sesión';
                         }
 
-                        $visitsData = [];
+                        $totalPages = $visits->count();
+                        $totalTime = $visits->last()->created_at->diffInMinutes($visits->first()->created_at);
+                        
+                        $uniqueId = uniqid();
+                        
+                        // Crear HTML de nodos
+                        $nodesHtml = '';
                         foreach ($visits as $index => $visit) {
                             $path = parse_url($visit->url, PHP_URL_PATH) ?: '/';
-                            $visitsData[] = [
-                                'id' => $visit->id,
-                                'step' => $index + 1,
-                                'time' => $visit->created_at->format('H:i:s'),
-                                'path' => $path,
-                                'isCurrent' => $visit->id === $record->id,
-                                'duration' => $index > 0 ? $visits[$index - 1]->created_at->diffInSeconds($visit->created_at) : 0,
-                                'details' => [
-                                    'url' => $visit->url,
-                                    'referer' => $visit->referer ?: 'Directo',
-                                    'device' => $visit->device_type,
-                                    'browser' => $visit->browser,
-                                    'timestamp' => $visit->created_at->format('d/m/Y H:i:s'),
-                                ]
-                            ];
+                            $time = $visit->created_at->format('H:i:s');
+                            $isCurrent = $visit->id === $record->id;
+                            $bgColor = $isCurrent ? '#4ade80' : '#3b82f6';
+                            $borderColor = $isCurrent ? '#22c55e' : '#2563eb';
+                            $borderWidth = $isCurrent ? '3px' : '2px';
+                            
+                            $nodesHtml .= "<div style='display: flex; align-items: center; gap: 1rem;'>";
+                            
+                            // Nodo
+                            $nodesHtml .= "<div style='min-width: 180px; background: {$bgColor}; color: white; padding: 1.5rem; border-radius: 0.75rem; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: {$borderWidth} solid {$borderColor};'>";
+                            $nodesHtml .= "<div style='font-weight: bold; font-size: 1rem; margin-bottom: 0.5rem;'>Paso " . ($index + 1) . "</div>";
+                            $nodesHtml .= "<div style='font-size: 0.875rem; opacity: 0.9; margin-bottom: 0.75rem;'>🕐 {$time}</div>";
+                            $nodesHtml .= "<div style='font-size: 1.125rem; font-weight: bold; word-break: break-word;'>{$path}</div>";
+                            if ($isCurrent) {
+                                $nodesHtml .= "<div style='font-size: 0.875rem; margin-top: 0.75rem; background: rgba(255,255,255,0.2); padding: 0.25rem; border-radius: 0.25rem;'>📍 Esta visita</div>";
+                            }
+                            $nodesHtml .= "</div>";
+                            
+                            // Flecha si no es el último
+                            if ($index < $visits->count() - 1) {
+                                $duration = $visit->created_at->diffInSeconds($visits[$index + 1]->created_at);
+                                $nodesHtml .= "<div style='display: flex; flex-direction: column; align-items: center; padding: 0 1rem;'>";
+                                $nodesHtml .= "<div style='color: #6b7280; font-size: 0.875rem; font-weight: bold; margin-bottom: 0.25rem;'>{$duration}s</div>";
+                                $nodesHtml .= "<div style='color: #3b82f6; font-size: 2.5rem; font-weight: bold; line-height: 1;'>→</div>";
+                                $nodesHtml .= "</div>";
+                            }
+                            
+                            $nodesHtml .= "</div>";
                         }
-
-                        $visitsJson = json_encode($visitsData);
-                        $totalPages = count($visitsData);
-                        $totalTime = $visits->last()->created_at->diffInMinutes($visits->first()->created_at);
-
-                        $diagramId = "journey-diagram-" . uniqid();
-                        $detailsId = "visit-details-" . uniqid();
-                        $detailsContentId = "details-content-" . uniqid();
 
                         return <<<HTML
 <div style="background: #f8f9fa; padding: 2rem; border-radius: 0.5rem;">
     <div style="margin-bottom: 1.5rem; padding: 1rem; background: #dbeafe; border-radius: 0.5rem; text-align: center; color: #1e40af;">
-        <strong>📊 {$totalPages} páginas visitadas</strong> | <strong>⏱️ {$totalTime} minutos en total</strong>
+        <strong style="font-size: 1.125rem;">📊 {$totalPages} páginas visitadas</strong>
+        <span style="margin: 0 1rem;">|</span>
+        <strong style="font-size: 1.125rem;">⏱️ {$totalTime} minutos en total</strong>
     </div>
     
-    <div id="{$diagramId}" style="display: flex; align-items: center; overflow-x: auto; padding: 2rem 0; gap: 1rem; min-height: 120px; background: white; border-radius: 0.5rem;">
-    </div>
-    
-    <div id="{$detailsId}" style="display: none; margin-top: 2rem; padding: 1.5rem; background: white; border: 2px solid #3b82f6; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <h3 style="margin: 0; color: #1e40af;">📄 Detalles de la Visita</h3>
-            <button onclick="document.getElementById('{$detailsId}').style.display='none'" style="background: #ef4444; color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.25rem; cursor: pointer; font-weight: bold;">✕ Cerrar</button>
+    <div style="background: white; padding: 2rem; border-radius: 0.5rem; overflow-x: auto;">
+        <div style="display: flex; align-items: center; gap: 0;">
+            {$nodesHtml}
         </div>
-        <div id="{$detailsContentId}"></div>
     </div>
 </div>
-
-<script>
-(function() {
-    setTimeout(function() {
-        const visits = {$visitsJson};
-        const diagram = document.getElementById('{$diagramId}');
-        
-        if (!diagram) {
-            console.error('Diagram element not found: {$diagramId}');
-            return;
-        }
-        
-        console.log('Rendering', visits.length, 'visits');
-        
-        visits.forEach(function(visit, index) {
-            const isCurrent = visit.isCurrent;
-            const bgColor = isCurrent ? '#4ade80' : '#3b82f6';
-            
-            // Crear nodo
-            const node = document.createElement('div');
-            node.style.cssText = 'min-width: 150px; background: ' + bgColor + '; color: white; padding: 1rem; border-radius: 0.5rem; text-align: center; cursor: pointer; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);' + (isCurrent ? ' border: 3px solid #22c55e;' : '');
-            node.innerHTML = '<div style="font-weight: bold; font-size: 0.875rem; margin-bottom: 0.5rem;">Paso ' + visit.step + '</div>' +
-                '<div style="font-size: 0.75rem; opacity: 0.9; margin-bottom: 0.5rem;">' + visit.time + '</div>' +
-                '<div style="font-size: 1rem; font-weight: bold;">' + visit.path + '</div>' +
-                (isCurrent ? '<div style="font-size: 0.75rem; margin-top: 0.5rem;">📍 Actual</div>' : '');
-            
-            node.addEventListener('mouseenter', function() {
-                this.style.transform = 'scale(1.05)';
-                this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
-            });
-            
-            node.addEventListener('mouseleave', function() {
-                this.style.transform = 'scale(1)';
-                this.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-            });
-            
-            node.addEventListener('click', function() {
-                const details = document.getElementById('{$detailsContentId}');
-                details.innerHTML = '<div style="display: grid; grid-template-columns: auto 1fr; gap: 1rem; font-size: 0.95rem;">' +
-                    '<strong>📍 Paso:</strong><span>' + visit.step + '</span>' +
-                    '<strong>🕐 Hora:</strong><span>' + visit.details.timestamp + '</span>' +
-                    '<strong>🔗 URL Completa:</strong><span style="word-break: break-all;">' + visit.details.url + '</span>' +
-                    '<strong>⬅️ Vino desde:</strong><span style="word-break: break-all;">' + visit.details.referer + '</span>' +
-                    '<strong>📱 Dispositivo:</strong><span>' + (visit.details.device || '-') + '</span>' +
-                    '<strong>🌐 Navegador:</strong><span>' + (visit.details.browser || '-') + '</span>' +
-                    (visit.duration > 0 ? '<strong>⏱️ Tiempo desde página anterior:</strong><span>' + visit.duration + ' segundos</span>' : '') +
-                    '</div>';
-                document.getElementById('{$detailsId}').style.display = 'block';
-                document.getElementById('{$detailsId}').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            });
-            
-            diagram.appendChild(node);
-            
-            // Agregar flecha si no es el último
-            if (index < visits.length - 1) {
-                const arrow = document.createElement('div');
-                arrow.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 0.25rem;';
-                arrow.innerHTML = '<div style="color: #6b7280; font-size: 0.875rem; font-weight: bold;">' + visits[index + 1].duration + 's</div>' +
-                    '<div style="color: #3b82f6; font-size: 2rem; font-weight: bold;">→</div>';
-                diagram.appendChild(arrow);
-            }
-        });
-        
-        console.log('Diagram rendered successfully');
-    }, 100);
-})();
-</script>
 HTML;
                     })
                     ->html()
