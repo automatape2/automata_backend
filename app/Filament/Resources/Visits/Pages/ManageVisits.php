@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Visits\Pages;
 
 use App\Filament\Resources\Visits\VisitResource;
+use App\Filament\Resources\Visits\Widgets\VisitsStatsOverview;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ManageRecords;
 
@@ -13,7 +14,14 @@ class ManageVisits extends ManageRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            // Removemos el botón de crear ya que las visitas se crean desde la API
+        ];
+    }
+    
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            VisitsStatsOverview::class,
         ];
     }
 }
