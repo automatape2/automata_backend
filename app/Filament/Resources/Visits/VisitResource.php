@@ -113,30 +113,46 @@ class VisitResource extends Resource
                             return 'No hay visitas en esta sesión';
                         }
 
-                        $journey = '';
+                        $journey = "<div style='font-family: monospace; background: #f8f9fa; padding: 1.5rem; border-radius: 0.5rem;'>";
+                        
                         foreach ($visits as $index => $visit) {
                             $isCurrent = $visit->id === $record->id;
-                            $marker = $isCurrent ? '➡️' : '•';
                             $time = $visit->created_at->format('H:i:s');
                             $path = parse_url($visit->url, PHP_URL_PATH) ?: $visit->url ?: 'Desconocido';
                             
-                            $journey .= sprintf(
-                                "%s Paso %d - %s - %s%s\n",
-                                $marker,
-                                $index + 1,
-                                $time,
-                                $path,
-                                $isCurrent ? ' (Actual)' : ''
-                            );
+                            // Calcular tiempo entre páginas
+                            $timeDiff = '';
+                            if ($index > 0) {
+                                $prevVisit = $visits[$index - 1];
+                                $seconds = $prevVisit->created_at->diffInSeconds($visit->created_at);
+                                $timeDiff = "<div style='text-align: center; color: #6b7280; margin: 0.5rem 0;'>⬇️ {$seconds}s</div>";
+                            }
+                            
+                            $bgColor = $isCurrent ? '#4ade80' : '#e5e7eb';
+                            $textColor = $isCurrent ? '#000' : '#374151';
+                            $border = $isCurrent ? '3px solid #22c55e' : '2px solid #d1d5db';
+                            
+                            $journey .= $timeDiff;
+                            $journey .= "<div style='background: {$bgColor}; color: {$textColor}; border: {$border}; padding: 1rem; border-radius: 0.5rem; margin: 0.5rem 0; text-align: center;'>";
+                            $journey .= "<div style='font-weight: bold; font-size: 0.875rem; margin-bottom: 0.25rem;'>Paso " . ($index + 1) . "</div>";
+                            $journey .= "<div style='font-size: 0.75rem; color: #6b7280; margin-bottom: 0.5rem;'>{$time}</div>";
+                            $journey .= "<div style='font-size: 1rem;'>{$path}</div>";
+                            if ($isCurrent) {
+                                $journey .= "<div style='font-size: 0.75rem; margin-top: 0.5rem; font-weight: bold;'>📍 Página Actual</div>";
+                            }
+                            $journey .= "</div>";
                         }
 
                         $totalTime = $visits->last()->created_at->diffInMinutes($visits->first()->created_at);
-                        $journey .= "\n📊 Total de páginas: {$visits->count()} | ⏱️ Tiempo en sitio: {$totalTime} minutos";
+                        $journey .= "<div style='margin-top: 1rem; padding: 1rem; background: #dbeafe; border-radius: 0.5rem; text-align: center; color: #1e40af;'>";
+                        $journey .= "<strong>📊 Total de páginas: {$visits->count()}</strong> | ";
+                        $journey .= "<strong>⏱️ Tiempo en sitio: {$totalTime} minutos</strong>";
+                        $journey .= "</div>";
+                        $journey .= "</div>";
 
                         return $journey;
                     })
-                    ->formatStateUsing(fn (string $state): string => $state)
-                    ->extraAttributes(['style' => 'white-space: pre-line; font-family: monospace; background: #f8f9fa; padding: 1rem; border-radius: 0.5rem;'])
+                    ->html()
                     ->visible(fn (Visit $record) => $record->session_id !== null),
             ]);
     }

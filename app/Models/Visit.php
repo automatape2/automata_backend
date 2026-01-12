@@ -84,4 +84,44 @@ class Visit extends Model
                 ];
             });
     }
+
+    /**
+     * Genera un diagrama Mermaid del recorrido de navegación
+     */
+    public function getMermaidJourney()
+    {
+        if (!$this->session_id) {
+            return null;
+        }
+
+        $visits = $this->sessionVisits();
+        
+        if ($visits->isEmpty()) {
+            return null;
+        }
+
+        $mermaid = "graph LR\n";
+        
+        foreach ($visits as $index => $visit) {
+            $nodeId = "step" . ($index + 1);
+            $time = $visit->created_at->format('H:i:s');
+            $path = parse_url($visit->url, PHP_URL_PATH) ?: '/';
+            $path = str_replace(['[', ']', '(', ')'], '', $path); // Sanitizar para Mermaid
+            
+            $isCurrent = $visit->id === $this->id;
+            $style = $isCurrent ? ":::current" : "";
+            
+            $mermaid .= "    {$nodeId}[\"{$time}<br/>{$path}\"]{$style}\n";
+            
+            if ($index < $visits->count() - 1) {
+                $nextNodeId = "step" . ($index + 2);
+                $diffSeconds = $visit->created_at->diffInSeconds($visits[$index + 1]->created_at);
+                $mermaid .= "    {$nodeId} -->|{$diffSeconds}s| {$nextNodeId}\n";
+            }
+        }
+        
+        $mermaid .= "\n    classDef current fill:#4ade80,stroke:#22c55e,stroke-width:3px,color:#000\n";
+        
+        return $mermaid;
+    }
 }
